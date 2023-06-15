@@ -35,6 +35,28 @@ std::vector<std::string> splitString(const std::string& line, char delimiter) {
     return tokens;
 }
 
+std::string addSecondsToDate(const std::string& dateString, int secondsToAdd) {
+    // Convert the string to a std::tm structure
+    std::tm timeStruct = {};
+    std::istringstream ss(dateString);
+    ss >> std::get_time(&timeStruct, "%Y-%m-%d %H:%M:%S");
+
+    // Convert std::tm to std::time_t
+    std::time_t timeValue = std::mktime(&timeStruct);
+
+    // Add seconds to the std::time_t value
+    timeValue += secondsToAdd;
+
+    // Convert std::time_t back to std::tm
+    std::tm* updatedTimeStruct = std::localtime(&timeValue);
+
+    // Format the updated std::tm structure to a string
+    std::ostringstream oss;
+    oss << std::put_time(updatedTimeStruct, "%Y-%m-%d %H:%M:%S");
+
+    return oss.str();
+}
+
 int main(int argc, const char *argv[])
 {
     if (argc < 3)
@@ -104,7 +126,7 @@ int main(int argc, const char *argv[])
             std::cout << "\rProgress: " << progressPercentage << "%" << std::flush;
             previousPercentage = progressPercentage;
         }
-
+        
         std::vector<std::string> columns = splitString(line, ','); 
         lon_o = std::stod(columns[10]);
         lat_o = std::stod(columns[11]);
@@ -112,7 +134,7 @@ int main(int argc, const char *argv[])
         lat_d = std::stod(columns[13]);
         
         // Discard faulty coordinates
-        if (lon_o == 0 || lat_o == 0 || lon_d == 0 || lat_d == 0) continue;
+        if (lon_o == 0) continue;
 
         params.coordinates.push_back({util::FloatLongitude{lon_o}, util::FloatLatitude{lat_o}});
         params.coordinates.push_back({util::FloatLongitude{lon_d}, util::FloatLatitude{lat_d}});
@@ -125,7 +147,7 @@ int main(int argc, const char *argv[])
             std::cout << "No routes found for 1 pair of coordinates.\n";
             return EXIT_FAILURE;
         }
-            
+        
         auto &routes = json_result.values["routes"].get<json::Array>();
         if (!routes.values.empty()) {
             auto &route = routes.values.at(0).get<json::Object>();
@@ -136,9 +158,14 @@ int main(int argc, const char *argv[])
             auto &durations = annotation.values.at("duration").get<json::Array>();
             float sumdur = 0;
             auto durationIt = durations.values.begin();
+            auto it = nodes.values.begin();
 
+            trayectorias << std::fixed << static_cast<std::int64_t>((*it).get<json::Number>().value) << " ";
+            it++;
+            tiempos << 0 << " ";
+            
             // Node IDs and Durations
-            for (auto it = std::next(nodes.values.begin()); it != nodes.values.end(); it++) {
+            for (it; it != nodes.values.end(); it++) {
                 trayectorias << std::fixed << static_cast<std::int64_t>((*it).get<json::Number>().value) << " ";
 
                 sumdur += (*durationIt).get<json::Number>().value;
@@ -147,8 +174,8 @@ int main(int argc, const char *argv[])
                 durationIt++;
             }
             trayectorias << 0 << " ";
-            tiempos << 0 << " ";
-
+            tiempos << 'F' << " ";
+            
             // Headers
             std::string newLine;
             for (int columnIndex : selectedColumns) {
@@ -156,10 +183,9 @@ int main(int argc, const char *argv[])
                     newLine += columns[columnIndex] + ',';
                 }
             }
-            // Remove the trailing comma
-            if (!newLine.empty()) {
-                newLine.pop_back();
-            }
+            newLine.pop_back();
+            newLine.pop_back();
+            newLine += ',' + addSecondsToDate(columns[5], sumdur);
 
             cabeceras << newLine << std::endl;
 
