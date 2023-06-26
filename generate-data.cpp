@@ -35,22 +35,16 @@ std::vector<std::string> splitString(const std::string& line, char delimiter) {
     return tokens;
 }
 
+// Add seconds to String Date in format "Y-m-d H:M:S"
 std::string addSecondsToDate(const std::string& dateString, int secondsToAdd) {
-    // Convert the string to a std::tm structure
     std::tm timeStruct = {};
     std::istringstream ss(dateString);
     ss >> std::get_time(&timeStruct, "%Y-%m-%d %H:%M:%S");
 
-    // Convert std::tm to std::time_t
     std::time_t timeValue = std::mktime(&timeStruct);
-
-    // Add seconds to the std::time_t value
     timeValue += secondsToAdd;
-
-    // Convert std::time_t back to std::tm
     std::tm* updatedTimeStruct = std::localtime(&timeValue);
 
-    // Format the updated std::tm structure to a string
     std::ostringstream oss;
     oss << std::put_time(updatedTimeStruct, "%Y-%m-%d %H:%M:%S");
 
