@@ -24,6 +24,8 @@
 
 #include <cstdlib>
 
+#define EDATE "2012-12-31 00:00:00" // Earliest trip starting date
+
 // Function to split a string based on delimiter
 std::vector<std::string> splitString(const std::string& line, char delimiter) {
     std::vector<std::string> tokens;
@@ -35,20 +37,35 @@ std::vector<std::string> splitString(const std::string& line, char delimiter) {
     return tokens;
 }
 
+// Returns a time_t whith the seconds since the epoc from a string date
+std::time_t convertStringToTimePoint(const std::string& dateString) {
+
+    std::tm tm = {};
+    std::istringstream iss(dateString);
+    iss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+
+    return std::mktime(&tm);
+}
+
 // Add seconds to String Date in format "Y-m-d H:M:S"
 std::string addSecondsToDate(const std::string& dateString, int secondsToAdd) {
-    std::tm timeStruct = {};
-    std::istringstream ss(dateString);
-    ss >> std::get_time(&timeStruct, "%Y-%m-%d %H:%M:%S");
 
-    std::time_t timeValue = std::mktime(&timeStruct);
+    std::time_t timeValue = convertStringToTimePoint(dateString);
     timeValue += secondsToAdd;
     std::tm* updatedTimeStruct = std::localtime(&timeValue);
-
     std::ostringstream oss;
     oss << std::put_time(updatedTimeStruct, "%Y-%m-%d %H:%M:%S");
 
     return oss.str();
+}
+
+// Convert string date to seconds since defined EDATE
+int dateToInt(const std::string dateString, std::chrono::_V2::system_clock::time_point edateTP) {
+
+    std::time_t dateTT = convertStringToTimePoint(dateString);
+    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::from_time_t(dateTT) - edateTP);
+    
+    return seconds.count();
 }
 
 int main(int argc, const char *argv[])
@@ -106,6 +123,8 @@ int main(int argc, const char *argv[])
     int currentLine = 0;
     int previousPercentage = -1;
 
+    time_t edateTT = convertStringToTimePoint(EDATE);
+
     double lon_o, lat_o, lon_d, lat_d;
     engine::api::ResultT result = json::Object();
     std::getline(input, line); // Discard headers line (comment this line if your csv has no headers)
@@ -117,7 +136,7 @@ int main(int argc, const char *argv[])
 
         // Print the progress percentage if it has changed
         if (progressPercentage != previousPercentage) {
-            std::cout << "\rProgress: " << progressPercentage << "%" << std::flush;
+            std::cout << "\rProgress: " << progressPercentage << "%  " << std::flush;
             previousPercentage = progressPercentage;
         }
         
@@ -179,6 +198,9 @@ int main(int argc, const char *argv[])
             }
             newLine.pop_back();
             newLine.pop_back();
+
+            newLine += ',' + std::to_string(dateToInt(columns[5], std::chrono::system_clock::from_time_t(edateTT)));
+
             newLine += ',' + addSecondsToDate(columns[5], sumdur);
 
             cabeceras << newLine << std::endl;
