@@ -1,20 +1,11 @@
-#include "osrm/match_parameters.hpp"
-#include "osrm/nearest_parameters.hpp"
 #include "osrm/route_parameters.hpp"
-#include "osrm/table_parameters.hpp"
-#include "osrm/trip_parameters.hpp"
-
 #include "osrm/coordinate.hpp"
 #include "osrm/engine_config.hpp"
 #include "osrm/json_container.hpp"
-
 #include "osrm/osrm.hpp"
-#include "osrm/status.hpp"
 
-#include <exception>
 #include <iostream>
 #include <string>
-#include <utility>
 #include <iomanip>
 #include <fstream>
 #include <sstream>
@@ -37,7 +28,7 @@ std::vector<std::string> splitString(const std::string& line, char delimiter) {
     return tokens;
 }
 
-// Returns a time_t whith the seconds since the epoc from a string date
+// Returns a time_t with the seconds since the epoc from a string date
 std::time_t convertStringToTimePoint(const std::string& dateString) {
 
     std::tm tm = {};
@@ -84,22 +75,24 @@ int main(int argc, const char *argv[])
     config.storage_config = {argv[2]};
     config.use_shared_memory = false;
 
-    // Use Multilevel Djiskstra algorithm to calculate shortest route
+    // Use Multilevel Dijkstra algorithm to calculate shortest route
     config.algorithm = EngineConfig::Algorithm::MLD;
 
     // Routing machine
     const OSRM osrm{config};
 
-    // Parameters for Route querry
+    // Parameters for Route query
     RouteParameters params;
     params.annotations_type = RouteParameters::AnnotationsType::All;
 
     // Specify the indices of the columns to be extracted (0-based index)
-    std::vector<int> selectedColumns = {1, 5, 10, 11, 12, 13};
+    std::vector<int> selectedColumns = {1, 10, 11, 12, 13};
 
     std::string outputFolder = "output";
-    if (!mkdir(outputFolder.c_str(), 0777))
-        std::cout << "Failed to create the output folder." << std::endl;
+    struct stat buffer;
+    if (stat(outputFolder.c_str(), &buffer))
+        if (mkdir(outputFolder.c_str(), 0777))
+            std::cout << "Failed to create the output folder." << std::endl;
 
     std::ifstream input(argv[1]);
     std::ofstream trayectorias(outputFolder + "/trayectorias.txt");
@@ -201,7 +194,7 @@ int main(int argc, const char *argv[])
 
             newLine += ',' + std::to_string(dateToInt(columns[5], std::chrono::system_clock::from_time_t(edateTT)));
 
-            newLine += ',' + addSecondsToDate(columns[5], sumdur);
+            newLine += ',' + std::to_string(dateToInt(addSecondsToDate(columns[5], sumdur), std::chrono::system_clock::from_time_t(edateTT)));
 
             cabeceras << newLine << std::endl;
 
