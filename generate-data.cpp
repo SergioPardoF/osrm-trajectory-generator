@@ -12,8 +12,9 @@
 #include <vector>
 #include <sys/stat.h>
 #include <chrono>
-
+#include <cmath>
 #include <cstdlib>
+#include <cstdint>
 
 #define EDATE "2012-12-31 00:00:00" // Earliest trip starting date
 
@@ -57,6 +58,15 @@ int dateToInt(const std::string dateString, std::chrono::_V2::system_clock::time
     auto seconds = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::from_time_t(dateTT) - edateTP);
     
     return seconds.count();
+}
+
+void updateProgress(int curLine, int totalLines, int prevPercentage) {
+    int progressPercentage = (curLine * 100) / totalLines;
+    // Print the progress percentage if it has changed
+    if (progressPercentage != prevPercentage) {
+        std::cout << "\rProgress: " << progressPercentage << "%  " << std::flush;
+        prevPercentage = progressPercentage;
+    }
 }
 
 int main(int argc, const char *argv[])
@@ -139,15 +149,10 @@ int main(int argc, const char *argv[])
     while (std::getline(input, line))
     {
         // Update the progress percentage
-        currentLine++;        
-        int progressPercentage = (currentLine * 100) / totalLines;
+        currentLine++;
+        updateProgress(currentLine, totalLines, previousPercentage);
 
-        // Print the progress percentage if it has changed
-        if (progressPercentage != previousPercentage) {
-            std::cout << "\rProgress: " << progressPercentage << "%  " << std::flush;
-            previousPercentage = progressPercentage;
-        }
-
+        params.coordinates.clear();
         std::vector<std::string> columns = splitString(line, ',');
         lon_o = std::stod(columns[10]);
         lat_o = std::stod(columns[11]);
@@ -177,19 +182,19 @@ int main(int argc, const char *argv[])
             auto &annotation = legObj.values.at("annotation").get<json::Object>();
             auto &nodes = annotation.values.at("nodes").get<json::Array>();
             auto &durations = annotation.values.at("duration").get<json::Array>();
-            float sumdur = 0;
+            int sumdur = 0;
             auto durationIt = durations.values.begin();
             auto it = nodes.values.begin();
 
             trayectorias << std::fixed << static_cast<std::int64_t>((*it).get<json::Number>().value) << " ";
             it++;
             tiempos << 0 << " ";
-            
+
             // Node IDs and Durations
             for (it; it != nodes.values.end(); it++) {
                 trayectorias << std::fixed << static_cast<std::int64_t>((*it).get<json::Number>().value) << " ";
 
-                sumdur += (*durationIt).get<json::Number>().value;
+                sumdur += std::round((*durationIt).get<json::Number>().value);
                 tiempos << sumdur << " ";
 
                 durationIt++;
