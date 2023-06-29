@@ -120,7 +120,22 @@ int main(int argc, const char *argv[])
 
     double lon_o, lat_o, lon_d, lat_d;
     engine::api::ResultT result = json::Object();
-    std::getline(input, line); // Discard headers line (comment this line if your csv has no headers)
+
+    std::getline(input, line); // Discard headers line
+    std::vector<std::string> columns = splitString(line, ',');
+    std::string headersLine;
+
+    for (int columnIndex : selectedColumns) {
+        if (columnIndex < columns.size()) {
+            headersLine += columns[columnIndex] + ',';
+        }
+    }
+    headersLine.pop_back();
+    headersLine.pop_back();
+
+    headersLine += ',' + std::string("pickup_datetime") + ',' + std::string("dropoff_datetime");
+    cabeceras << headersLine << std::endl;
+
     while (std::getline(input, line))
     {
         // Update the progress percentage
@@ -132,8 +147,8 @@ int main(int argc, const char *argv[])
             std::cout << "\rProgress: " << progressPercentage << "%  " << std::flush;
             previousPercentage = progressPercentage;
         }
-        
-        std::vector<std::string> columns = splitString(line, ','); 
+
+        std::vector<std::string> columns = splitString(line, ',');
         lon_o = std::stod(columns[10]);
         lat_o = std::stod(columns[11]);
         lon_d = std::stod(columns[12]);
