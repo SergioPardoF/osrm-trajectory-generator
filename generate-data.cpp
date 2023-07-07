@@ -17,6 +17,7 @@
 #include <cstdint>
 
 #define EDATE "2012-12-31 00:00:00" // Earliest trip starting date
+#define DATE_COLUMN 5               // Column of the csv for the starting date
 
 // Function to split a string based on delimiter
 std::vector<std::string> splitString(const std::string& line, char delimiter) {
@@ -99,7 +100,7 @@ int main(int argc, const char *argv[])
     std::vector<int> selectedColumns = {1, 10, 11, 12, 13};
 
     std::string outputFolder = "output";
-    struct stat buffer;
+    struct stat buffer{};
     if (stat(outputFolder.c_str(), &buffer))
         if (mkdir(outputFolder.c_str(), 0777))
             std::cout << "Failed to create the output folder." << std::endl;
@@ -114,8 +115,9 @@ int main(int argc, const char *argv[])
         return EXIT_FAILURE;
     }
 
+    // count lines to track progress
     std::string line;
-    int totalLines = -1;
+    int totalLines = -1; // discard header
     while (std::getline(input, line)) {
         totalLines++;
     }
@@ -132,12 +134,13 @@ int main(int argc, const char *argv[])
     engine::api::ResultT result = json::Object();
 
     std::getline(input, line); // Discard headers line
-    std::vector<std::string> columns = splitString(line, ',');
+    std::vector<std::string> headers = splitString(line, ',');
     std::string headersLine;
 
+    // Headers for output csv
     for (int columnIndex : selectedColumns) {
-        if (columnIndex < columns.size()) {
-            headersLine += columns[columnIndex] + ',';
+        if (columnIndex < headers.size()) {
+            headersLine += headers[columnIndex] + ',';
         }
     }
     headersLine.pop_back();
@@ -162,8 +165,8 @@ int main(int argc, const char *argv[])
         // Discard faulty coordinates
         if (lon_o == 0) continue;
 
-        params.coordinates.push_back({util::FloatLongitude{lon_o}, util::FloatLatitude{lat_o}});
-        params.coordinates.push_back({util::FloatLongitude{lon_d}, util::FloatLatitude{lat_d}});
+        params.coordinates.emplace_back(util::FloatLongitude{lon_o}, util::FloatLatitude{lat_o});
+        params.coordinates.emplace_back(util::FloatLongitude{lon_d}, util::FloatLatitude{lat_d});
 
         // Execute routing request, this does the heavy lifting
         const auto status = osrm.Route(params, result);
@@ -171,7 +174,7 @@ int main(int argc, const char *argv[])
         auto &json_result = result.get<json::Object>();
         if (status == Status::Error) {
             std::cout << "No routes found for 1 pair of coordinates.\n";
-            return EXIT_FAILURE;
+            continue;
         }
         
         auto &routes = json_result.values["routes"].get<json::Array>();
@@ -192,7 +195,7 @@ int main(int argc, const char *argv[])
 
             // Node IDs and Durations
             for (it; it != nodes.values.end(); it++) {
-                trayectorias << std::fixed << static_cast<std::int64_t>((*it).get<json::Number>().value) << " ";
+                trayectorias << static_cast<std::uint32_t>((*it).get<json::Number>().value) << " ";
 
                 sumdur += std::round((*durationIt).get<json::Number>().value);
                 tiempos << sumdur << " ";
@@ -200,22 +203,17 @@ int main(int argc, const char *argv[])
                 durationIt++;
             }
             trayectorias << 0 << " ";
-            tiempos << 'F' << " ";
+            tiempos << UINT32_MAX << " ";
             
             // Headers
             std::string newLine;
-            for (int columnIndex : selectedColumns) {
-                if (columnIndex < columns.size()) {
+            for (int columnIndex : selectedColumns)
+                if (columnIndex < columns.size())
                     newLine += columns[columnIndex] + ',';
-                }
-            }
             newLine.pop_back();
             newLine.pop_back();
-
-            newLine += ',' + std::to_string(dateToInt(columns[5], std::chrono::system_clock::from_time_t(edateTT)));
-
-            newLine += ',' + std::to_string(dateToInt(addSecondsToDate(columns[5], sumdur), std::chrono::system_clock::from_time_t(edateTT)));
-
+            newLine += ',' + std::to_string(static_cast<std::uint32_t>(dateToInt(columns[DATE_COLUMN], std::chrono::system_clock::from_time_t(edateTT))));
+            newLine += ',' + std::to_string(static_cast<std::uint32_t>(dateToInt(addSecondsToDate(columns[DATE_COLUMN], sumdur), std::chrono::system_clock::from_time_t(edateTT))));
             cabeceras << newLine << std::endl;
 
         }
