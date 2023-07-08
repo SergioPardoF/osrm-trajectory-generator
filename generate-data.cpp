@@ -25,7 +25,7 @@ std::vector<std::string> splitString(const std::string& line, char delimiter) {
     std::stringstream ss(line);
     std::string token;
     while (std::getline(ss, token, delimiter)) {
-        tokens.push_back(token);
+        tokens.push_back(token.empty()?" ":token);
     }
     return tokens;
 }
@@ -72,9 +72,9 @@ void updateProgress(int curLine, int totalLines, int prevPercentage) {
 
 int main(int argc, const char *argv[])
 {
-    if (argc < 3)
+    if (argc < 4)
     {
-        std::cerr << "Usage: " << argv[0] << " data.csv" << " map.osrm\n";
+        std::cerr << "Usage: " << argv[0] << " data.csv" << " map.osrm" << " /outputdir" << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -99,29 +99,29 @@ int main(int argc, const char *argv[])
     // Specify the indices of the columns to be extracted (0-based index)
     std::vector<int> selectedColumns = {1, 10, 11, 12, 13};
 
-    std::string outputFolder = "output";
+    std::string outputFolder = argv[3] + std::string("/output");
     struct stat buffer{};
     if (stat(outputFolder.c_str(), &buffer))
-        if (mkdir(outputFolder.c_str(), 0777))
-            std::cout << "Failed to create the output folder." << std::endl;
+        mkdir(outputFolder.c_str(), 0777);
 
     std::ifstream input(argv[1]);
     std::ofstream trayectorias(outputFolder + "/trayectorias.txt");
     std::ofstream tiempos(outputFolder + "/tiempos.txt");
     std::ofstream cabeceras(outputFolder + "/cabeceras.csv");
+    std::ofstream errores(outputFolder + "/errores.txt");
 
-    if (!input.is_open() || !trayectorias.is_open() || !tiempos.is_open() || !cabeceras.is_open()) {
+    if(!input.is_open() || !trayectorias.is_open() || !tiempos.is_open() || !cabeceras.is_open() || !errores.is_open()){
         std::cout << "Error opening files." << std::endl;
         return EXIT_FAILURE;
     }
 
-    // count lines to track progress
+    std::cout << "Counting lines to track progress..." << std::endl;
     std::string line;
     int totalLines = -1; // discard header
     while (std::getline(input, line)) {
         totalLines++;
     }
-    std::cout << "Processing " << totalLines << " lines.\n";
+    std::cout << "Processing " << totalLines << " lines..." << std::endl;
     input.clear();
     input.seekg(0);
 
@@ -149,21 +149,26 @@ int main(int argc, const char *argv[])
     headersLine += ',' + std::string("pickup_datetime") + ',' + std::string("dropoff_datetime");
     cabeceras << headersLine << std::endl;
 
+    int count = 0;
+    int faultyLines = 0;
     while (std::getline(input, line))
     {
         // Update the progress percentage
         currentLine++;
         updateProgress(currentLine, totalLines, previousPercentage);
 
+        count++;
         params.coordinates.clear();
         std::vector<std::string> columns = splitString(line, ',');
+        if (columns[10]==" "|columns[11]==" "|columns[12]==" "|columns[13]==" "|columns[1]==" "|columns[5]==" ") {
+            faultyLines++;
+            errores << "Line: " << count << " Contents: " << line << std::endl;
+            continue;
+        }
         lon_o = std::stod(columns[10]);
         lat_o = std::stod(columns[11]);
         lon_d = std::stod(columns[12]);
         lat_d = std::stod(columns[13]);
-        
-        // Discard faulty coordinates
-        if (lon_o == 0) continue;
 
         params.coordinates.emplace_back(util::FloatLongitude{lon_o}, util::FloatLatitude{lat_o});
         params.coordinates.emplace_back(util::FloatLongitude{lon_d}, util::FloatLatitude{lat_d});
@@ -173,7 +178,8 @@ int main(int argc, const char *argv[])
 
         auto &json_result = result.get<json::Object>();
         if (status == Status::Error) {
-            std::cout << "No routes found for 1 pair of coordinates.\n";
+            faultyLines++;
+            errores << "Line: " << count << " Contents: " << line << std::endl;
             continue;
         }
         
@@ -189,7 +195,7 @@ int main(int argc, const char *argv[])
             auto durationIt = durations.values.begin();
             auto it = nodes.values.begin();
 
-            trayectorias << std::fixed << static_cast<std::int64_t>((*it).get<json::Number>().value) << " ";
+            trayectorias << std::fixed << static_cast<std::int32_t>((*it).get<json::Number>().value) << " ";
             it++;
             tiempos << 0 << " ";
 
@@ -224,12 +230,24 @@ int main(int argc, const char *argv[])
     trayectorias.close();
     tiempos.close();
     cabeceras.close();
+    errores.close();
 
+    // Print execution time
     auto end = std::chrono::high_resolution_clock::now();
+    auto time = end - start;
+    auto hours = std::chrono::duration_cast<std::chrono::hours>(time);
+    time -= hours;
+    auto minutes = std::chrono::duration_cast<std::chrono::minutes>(time);
+    time -= minutes;
+    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(time);
+    std::cout << "Execution time: ";
+    std::cout << std::setfill('0');
+    std::cout << std::setw(2) << hours.count() << "H:";
+    std::cout << std::setw(2) << minutes.count() << "M:";
+    std::cout << std::setw(2) << seconds.count() << "S" << std::endl;
 
-    auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    std::cout << "Execution time: " << time << " milliseconds." << std::endl;
-
+    std::cout << "Lines with errors: " << faultyLines << " (stored in " << outputFolder + "/errores.txt" << ")";
+    std::cout << std::endl;
 
     return EXIT_SUCCESS;
 }
