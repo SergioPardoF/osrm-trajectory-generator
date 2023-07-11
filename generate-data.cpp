@@ -58,16 +58,17 @@ int dateToInt(const std::string dateString, std::chrono::_V2::system_clock::time
     std::time_t dateTT = convertStringToTimePoint(dateString);
     auto seconds = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::from_time_t(dateTT) - edateTP);
     
-    return seconds.count();
+    return static_cast<int>(seconds.count());
 }
 
-void updateProgress(int curLine, int totalLines, int prevPercentage) {
+int updateProgress(int curLine, int totalLines, int prevPercentage) {
     int progressPercentage = (curLine * 100) / totalLines;
     // Print the progress percentage if it has changed
     if (progressPercentage != prevPercentage) {
         std::cout << "\rProgress: " << progressPercentage << "%  " << std::flush;
         prevPercentage = progressPercentage;
     }
+    return prevPercentage;
 }
 
 int main(int argc, const char *argv[])
@@ -80,7 +81,7 @@ int main(int argc, const char *argv[])
 
     using namespace osrm;
     auto start = std::chrono::high_resolution_clock::now();
-    // Configure based on a .osrm base path, and no datasets in shared mem from osrm-datastore
+    // Configure based on a .osrm base path
     EngineConfig config;
 
     config.storage_config = {argv[2]};
@@ -96,7 +97,7 @@ int main(int argc, const char *argv[])
     RouteParameters params;
     params.annotations_type = RouteParameters::AnnotationsType::All;
 
-    // Specify the indices of the columns to be extracted (0-based index)
+    // Specify the indexes of the columns to be extracted (0-based index)
     std::vector<int> selectedColumns = {1, 10, 11, 12, 13};
 
     std::string outputFolder = argv[3] + std::string("/output");
@@ -149,20 +150,18 @@ int main(int argc, const char *argv[])
     headersLine += ',' + std::string("pickup_datetime") + ',' + std::string("dropoff_datetime");
     cabeceras << headersLine << std::endl;
 
-    int count = 0;
     int faultyLines = 0;
     while (std::getline(input, line))
     {
         // Update the progress percentage
         currentLine++;
-        updateProgress(currentLine, totalLines, previousPercentage);
+        previousPercentage = updateProgress(currentLine, totalLines, previousPercentage);
 
-        count++;
         params.coordinates.clear();
         std::vector<std::string> columns = splitString(line, ',');
         if (columns[10]==" "|columns[11]==" "|columns[12]==" "|columns[13]==" "|columns[1]==" "|columns[5]==" ") {
             faultyLines++;
-            errores << "Line: " << count << " Contents: " << line << std::endl;
+            errores<<"Line: "<<currentLine<<" | Reason: at least one null mandatory column |"<<" Contents: "<<line<<std::endl;
             continue;
         }
         lon_o = std::stod(columns[10]);
@@ -179,7 +178,7 @@ int main(int argc, const char *argv[])
         auto &json_result = result.get<json::Object>();
         if (status == Status::Error) {
             faultyLines++;
-            errores << "Line: " << count << " Contents: " << line << std::endl;
+            errores<<"Line: "<<currentLine<<" | Reason: OSRM couldn't trace route |"<<" Contents: "<<line<<std::endl;
             continue;
         }
         
@@ -203,7 +202,7 @@ int main(int argc, const char *argv[])
             for (it; it != nodes.values.end(); it++) {
                 trayectorias << static_cast<std::uint32_t>((*it).get<json::Number>().value) << " ";
 
-                sumdur += std::round((*durationIt).get<json::Number>().value);
+                sumdur += static_cast<int>(std::round((*durationIt).get<json::Number>().value));
                 tiempos << sumdur << " ";
 
                 durationIt++;
