@@ -17,7 +17,12 @@
 #include <cstdint>
 
 #define EDATE "2012-12-31 00:00:00" // Earliest trip starting date
+#define ID_COLUMN   1               // Column of the object id
 #define DATE_COLUMN 5               // Column of the csv for the starting date
+#define LONG_O      10              // Column of the longitude of origin
+#define LAT_O       11              // Column of the latitude of origin
+#define LONG_D      12              // Column of the longitude of destination
+#define LAT_D       13              // Column of the latitude of destination
 
 // Function to split a string based on delimiter
 std::vector<std::string> splitString(const std::string& line, char delimiter) {
@@ -98,7 +103,7 @@ int main(int argc, const char *argv[])
     params.annotations_type = RouteParameters::AnnotationsType::All;
 
     // Specify the indexes of the columns to be extracted (0-based index)
-    std::vector<int> selectedColumns = {1, 10, 11, 12, 13};
+    std::vector<int> selectedColumns = {ID_COLUMN, LONG_O, LAT_O, LONG_D, LAT_D};
 
     std::string outputFolder = argv[3] + std::string("/output");
     struct stat buffer{};
@@ -159,15 +164,15 @@ int main(int argc, const char *argv[])
 
         params.coordinates.clear();
         std::vector<std::string> columns = splitString(line, ',');
-        if (columns[10]==" "|columns[11]==" "|columns[12]==" "|columns[13]==" "|columns[1]==" "|columns[5]==" ") {
+        if (columns[LONG_O]==" "|columns[LAT_O]==" "|columns[LONG_D]==" "|columns[LAT_D]==" "|columns[ID_COLUMN]==" "|columns[DATE_COLUMN]==" ") {
             faultyLines++;
             errores<<"Line: "<<currentLine<<" | Reason: at least one null mandatory column |"<<" Contents: "<<line<<std::endl;
             continue;
         }
-        lon_o = std::stod(columns[10]);
-        lat_o = std::stod(columns[11]);
-        lon_d = std::stod(columns[12]);
-        lat_d = std::stod(columns[13]);
+        lon_o = std::stod(columns[LONG_O]);
+        lat_o = std::stod(columns[LAT_O]);
+        lon_d = std::stod(columns[LONG_D]);
+        lat_d = std::stod(columns[LAT_D]);
 
         params.coordinates.emplace_back(util::FloatLongitude{lon_o}, util::FloatLatitude{lat_o});
         params.coordinates.emplace_back(util::FloatLongitude{lon_d}, util::FloatLatitude{lat_d});
@@ -194,13 +199,13 @@ int main(int argc, const char *argv[])
             auto durationIt = durations.values.begin();
             auto it = nodes.values.begin();
 
-            trayectorias << std::fixed << static_cast<std::int32_t>((*it).get<json::Number>().value) << " ";
+            trayectorias << static_cast<std::int64_t>((*it).get<json::Number>().value) << " ";
             it++;
             tiempos << 0 << " ";
 
             // Node IDs and Durations
             for (it; it != nodes.values.end(); it++) {
-                trayectorias << static_cast<std::uint32_t>((*it).get<json::Number>().value) << " ";
+                trayectorias << static_cast<std::uint64_t>((*it).get<json::Number>().value) << " ";
 
                 sumdur += static_cast<int>(std::round((*durationIt).get<json::Number>().value));
                 tiempos << sumdur << " ";
