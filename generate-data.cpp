@@ -123,7 +123,7 @@ int main(int argc, const char *argv[])
 
     std::cout << "Counting lines to track progress..." << std::endl;
     std::string line;
-    int totalLines = -1; // discard header
+    uint64_t totalLines = -1; // discard header
     while (std::getline(input, line)) {
         totalLines++;
     }
@@ -131,7 +131,7 @@ int main(int argc, const char *argv[])
     input.clear();
     input.seekg(0);
 
-    int currentLine = 0;
+    uint64_t currentLine = 0;
     int previousPercentage = -1;
 
     time_t edateTT = convertStringToTimePoint(EDATE);
@@ -139,7 +139,7 @@ int main(int argc, const char *argv[])
     double lon_o, lat_o, lon_d, lat_d;
     engine::api::ResultT result = json::Object();
 
-    std::getline(input, line); // Discard headers line
+    std::getline(input, line); // Headers line
     std::vector<std::string> headers = splitString(line, ',');
     std::string headersLine;
 
@@ -156,6 +156,8 @@ int main(int argc, const char *argv[])
     cabeceras << headersLine << std::endl;
 
     int faultyLines = 0;
+    uint64_t nodenumber = 0;
+    uint64_t biggestnode = 0;
     while (std::getline(input, line))
     {
         // Update the progress percentage
@@ -200,16 +202,20 @@ int main(int argc, const char *argv[])
             auto it = nodes.values.begin();
 
             trayectorias << static_cast<std::int64_t>((*it).get<json::Number>().value) << " ";
+            if (static_cast<std::int64_t>((*it).get<json::Number>().value) > biggestnode)
+                biggestnode = static_cast<std::int64_t>((*it).get<json::Number>().value);
             it++;
+            nodenumber++;
             tiempos << 0 << " ";
 
             // Node IDs and Durations
             for (it; it != nodes.values.end(); it++) {
                 trayectorias << static_cast<std::uint64_t>((*it).get<json::Number>().value) << " ";
-
+                if (static_cast<std::int64_t>((*it).get<json::Number>().value) > biggestnode)
+                    biggestnode = static_cast<std::int64_t>((*it).get<json::Number>().value);
+                nodenumber++;
                 sumdur += static_cast<int>(std::round((*durationIt).get<json::Number>().value));
                 tiempos << sumdur << " ";
-
                 durationIt++;
             }
             trayectorias << 0 << " ";
@@ -252,6 +258,8 @@ int main(int argc, const char *argv[])
 
     std::cout << "Lines with errors: " << faultyLines << " (stored in " << outputFolder + "/errores.txt" << ")";
     std::cout << std::endl;
+    std::cout << "Total number of nodes in " << outputFolder + "/trayectorias.txt: " << nodenumber << std::endl;
+    std::cout << "Biggest node: " << biggestnode << std::endl;
 
     return EXIT_SUCCESS;
 }
