@@ -41,3 +41,17 @@ sudo apt install -y liblua5.2-dev libboost-all-dev libprotobuf-dev libtbb-dev li
     - this will compile the OSRM backend and the generator
 - ./build.sh (if needed, use chmod +x path/compile.sh)
     - this will extract the us northeast map in ./maps/us-ne and create the structures needed for tracing the routes
+
+#### Docker
+
+Situate in the root directory of the repository and run:
+
+```
+docker build -t osrm-generator .
+```
+
+After that run the generator with:
+
+```
+docker run -v </path/to/csv/with/data>:/csv -v </path/to/output/dir>:/out osrm-generator /csv/<csv_name.csv> /data/maps/us-ne/us-northeast-latest /out
+```

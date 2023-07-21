@@ -20,7 +20,7 @@ if(WIN32 AND MSVC_VERSION LESS 1900)
 endif()
 
 link_directories(${LibOSRM_LIBRARY_DIRS})
-add_executable(data-generator generate-data.cpp)
+add_executable(data-generator src/generate-data.cpp)
 
 find_package(LibOSRM REQUIRED)
 
