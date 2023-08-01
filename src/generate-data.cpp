@@ -23,6 +23,7 @@
 #define LAT_O       11              // Column of the latitude of origin
 #define LONG_D      12              // Column of the longitude of destination
 #define LAT_D       13              // Column of the latitude of destination
+#define MAX_TRAY_SIZE 7516192768    // Max size of output trayectorie files
 
 // Function to split a string based on delimiter
 std::vector<std::string> splitString(const std::string& line, char delimiter) {
@@ -64,6 +65,27 @@ int dateToInt(const std::string dateString, std::chrono::_V2::system_clock::time
     auto seconds = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::from_time_t(dateTT) - edateTP);
     
     return static_cast<int>(seconds.count());
+}
+
+std::vector<uint8_t> uint64ToBinary(uint64_t trajectory) {
+    std::vector<uint8_t> binary;
+    binary.reserve(64); // Reserve space for 64 bits
+
+    for (int i = 63; i >= 0; --i) {
+        uint8_t bit = (trajectory >> i) & 1;
+        binary.push_back(bit);
+    }
+
+    return binary;
+}
+
+// Function to get the size of a file in bytes
+std::uintmax_t getFileSize(const std::string& filename) {
+    struct stat fileStat;
+    if (stat(filename.c_str(), &fileStat) == 0) {
+        return fileStat.st_size;
+    }
+    return 0;
 }
 
 int updateProgress(int curLine, int totalLines, int prevPercentage) {
@@ -111,12 +133,12 @@ int main(int argc, const char *argv[])
         mkdir(outputFolder.c_str(), 0777);
 
     std::ifstream input(argv[1]);
-    std::ofstream trayectorias(outputFolder + "/trayectorias.txt");
+    std::ofstream trayec_rlz(outputFolder + "/trayectorias-rlz", std::ios::binary);
     std::ofstream tiempos(outputFolder + "/tiempos.txt");
     std::ofstream cabeceras(outputFolder + "/cabeceras.csv");
     std::ofstream errores(outputFolder + "/errores.txt");
 
-    if(!input.is_open() || !trayectorias.is_open() || !tiempos.is_open() || !cabeceras.is_open() || !errores.is_open()){
+    if(!input.is_open() || !trayec_rlz.is_open() || !tiempos.is_open() || !cabeceras.is_open() || !errores.is_open()){
         std::cout << "Error opening files." << std::endl;
         return EXIT_FAILURE;
     }
@@ -157,7 +179,9 @@ int main(int argc, const char *argv[])
 
     int faultyLines = 0;
     uint64_t nodenumber = 0;
-    uint64_t biggestnode = 0;
+    char separator = ' ';
+    std::vector<uint8_t> tray_sep = uint64ToBinary(0);
+    const std::uintmax_t maxSize = MAX_TRAY_SIZE;
     while (std::getline(input, line))
     {
         // Update the progress percentage
@@ -201,24 +225,25 @@ int main(int argc, const char *argv[])
             auto durationIt = durations.values.begin();
             auto it = nodes.values.begin();
 
-            trayectorias << static_cast<std::int64_t>((*it).get<json::Number>().value) << " ";
-            if (static_cast<std::int64_t>((*it).get<json::Number>().value) > biggestnode)
-                biggestnode = static_cast<std::int64_t>((*it).get<json::Number>().value);
+            //trayectorias << static_cast<std::uint64_t>(((*it).get<json::Number>().value)) << " ";
+            std::vector<uint8_t> binaryTrajectory = uint64ToBinary((*it).get<json::Number>().value);
+            trayec_rlz.write(reinterpret_cast<char*>(binaryTrajectory.data()), binaryTrajectory.size());
+            trayec_rlz.write(&separator, sizeof(separator));
             it++;
             nodenumber++;
             tiempos << 0 << " ";
 
             // Node IDs and Durations
             for (it; it != nodes.values.end(); it++) {
-                trayectorias << static_cast<std::uint64_t>((*it).get<json::Number>().value) << " ";
-                if (static_cast<std::int64_t>((*it).get<json::Number>().value) > biggestnode)
-                    biggestnode = static_cast<std::int64_t>((*it).get<json::Number>().value);
-                nodenumber++;
+                std::vector<uint8_t> binaryTrajectory = uint64ToBinary((*it).get<json::Number>().value);
+                trayec_rlz.write(reinterpret_cast<char*>(binaryTrajectory.data()), binaryTrajectory.size());
+                trayec_rlz.write(&separator, sizeof(separator));                nodenumber++;
                 sumdur += static_cast<int>(std::round((*durationIt).get<json::Number>().value));
                 tiempos << sumdur << " ";
                 durationIt++;
             }
-            trayectorias << 0 << " ";
+            //trayectorias << 0 << " ";
+            trayec_rlz.write(reinterpret_cast<char*>(tray_sep.data()), tray_sep.size());
             tiempos << UINT32_MAX << " ";
             
             // Headers
@@ -232,12 +257,18 @@ int main(int argc, const char *argv[])
             newLine += ',' + std::to_string(static_cast<std::uint32_t>(dateToInt(addSecondsToDate(columns[DATE_COLUMN], sumdur), std::chrono::system_clock::from_time_t(edateTT))));
             cabeceras << newLine << std::endl;
 
+            std::uintmax_t currentSize = getFileSize(outputFolder + "/trayectorias-rlz");
+            if (currentSize > maxSize) {
+                std::cout << "RLZ Trajectory file reached max established file size" << std::endl;
+                break;
+            }
+
         }
     }
     std::cout << std::endl;
 
     input.close();
-    trayectorias.close();
+    trayec_rlz.close();
     tiempos.close();
     cabeceras.close();
     errores.close();
@@ -258,8 +289,7 @@ int main(int argc, const char *argv[])
 
     std::cout << "Lines with errors: " << faultyLines << " (stored in " << outputFolder + "/errores.txt" << ")";
     std::cout << std::endl;
-    std::cout << "Total number of nodes in " << outputFolder + "/trayectorias.txt: " << nodenumber << std::endl;
-    std::cout << "Biggest node: " << biggestnode << std::endl;
+    std::cout << "Total number of nodes in " << outputFolder + "/trayec_rlz.txt: " << nodenumber << std::endl;
 
     return EXIT_SUCCESS;
 }
