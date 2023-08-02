@@ -23,7 +23,7 @@
 #define LAT_O       11              // Column of the latitude of origin
 #define LONG_D      12              // Column of the longitude of destination
 #define LAT_D       13              // Column of the latitude of destination
-#define MAX_TRAY_SIZE 7516192768    // Max size of output trayectorie files
+#define MAX_TRAY_SIZE 7516192768    // Max size of output trajectory files
 
 // Function to split a string based on delimiter
 std::vector<std::string> splitString(const std::string& line, char delimiter) {
@@ -179,8 +179,8 @@ int main(int argc, const char *argv[])
 
     int faultyLines = 0;
     uint64_t nodenumber = 0;
-    char separator = ' ';
-    std::vector<uint8_t> tray_sep = uint64ToBinary(0);
+    char space = ' ';
+    uint64_t tray_sep = UINT64_MAX;
     const std::uintmax_t maxSize = MAX_TRAY_SIZE;
     while (std::getline(input, line))
     {
@@ -226,24 +226,30 @@ int main(int argc, const char *argv[])
             auto it = nodes.values.begin();
 
             //trayectorias << static_cast<std::uint64_t>(((*it).get<json::Number>().value)) << " ";
-            std::vector<uint8_t> binaryTrajectory = uint64ToBinary((*it).get<json::Number>().value);
-            trayec_rlz.write(reinterpret_cast<char*>(binaryTrajectory.data()), binaryTrajectory.size());
-            trayec_rlz.write(&separator, sizeof(separator));
+            //std::vector<uint8_t> binaryTrajectory = uint64ToBinary((*it).get<json::Number>().value);
+            //trayec_rlz.write((char*)(binaryTrajectory.data()), binaryTrajectory.size());
+            //trayec_rlz.write(&space, sizeof(space));
+            uint64_t node = static_cast<std::uint64_t>(((*it).get<json::Number>().value));
+            trayec_rlz.write(reinterpret_cast<const char*>(&node), sizeof(uint64_t));
+            trayec_rlz.write(&space, sizeof(space));
             it++;
             nodenumber++;
             tiempos << 0 << " ";
 
             // Node IDs and Durations
             for (it; it != nodes.values.end(); it++) {
-                std::vector<uint8_t> binaryTrajectory = uint64ToBinary((*it).get<json::Number>().value);
-                trayec_rlz.write(reinterpret_cast<char*>(binaryTrajectory.data()), binaryTrajectory.size());
-                trayec_rlz.write(&separator, sizeof(separator));                nodenumber++;
+                //binaryTrajectory = uint64ToBinary((*it).get<json::Number>().value);
+                //trayec_rlz.write((char*)(binaryTrajectory.data()), binaryTrajectory.size());
+                node = static_cast<std::uint64_t>(((*it).get<json::Number>().value));
+                trayec_rlz.write((char*)(&node), sizeof(uint64_t));
+                trayec_rlz.write(&space, sizeof(space));
+                nodenumber++;
                 sumdur += static_cast<int>(std::round((*durationIt).get<json::Number>().value));
                 tiempos << sumdur << " ";
                 durationIt++;
             }
             //trayectorias << 0 << " ";
-            trayec_rlz.write(reinterpret_cast<char*>(tray_sep.data()), tray_sep.size());
+            trayec_rlz.write((char*)(&tray_sep), sizeof(uint64_t));
             tiempos << UINT32_MAX << " ";
             
             // Headers
