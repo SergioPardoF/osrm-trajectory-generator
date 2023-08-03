@@ -67,18 +67,6 @@ int dateToInt(const std::string dateString, std::chrono::_V2::system_clock::time
     return static_cast<int>(seconds.count());
 }
 
-std::vector<uint8_t> uint64ToBinary(uint64_t trajectory) {
-    std::vector<uint8_t> binary;
-    binary.reserve(64); // Reserve space for 64 bits
-
-    for (int i = 63; i >= 0; --i) {
-        uint8_t bit = (trajectory >> i) & 1;
-        binary.push_back(bit);
-    }
-
-    return binary;
-}
-
 // Function to get the size of a file in bytes
 std::uintmax_t getFileSize(const std::string& filename) {
     struct stat fileStat{};
@@ -239,27 +227,21 @@ int main(int argc, const char *argv[])
             auto durationIt = durations.values.begin();
             auto it = nodes.values.begin();
 
+            // Trajectories and Durations
             auto rlzNode = static_cast<std::uint64_t>(((*it).get<json::Number>().value));
-            trayec_rlz.write(reinterpret_cast<const char*>(&rlzNode), sizeof(uint64_t));
-            trayec_rlz.write(&space, sizeof(space));
+            trayec_rlz.write((char*)(&rlzNode), sizeof(uint64_t));
 
             uint32_t repNode = convert64to32(rlzNode, map, mapCounter);
-            trayec_rep.write(reinterpret_cast<const char*>(&repNode), sizeof(uint32_t));
-            trayec_rep.write(&space, sizeof(space));
+            trayec_rep.write((char*)(&repNode), sizeof(uint32_t));
 
             it++;
-            //nodenumber++;
             tiempos << 0 << " ";
-
-            // Node IDs and Durations
             for (it; it != nodes.values.end(); it++) {
                 rlzNode = static_cast<std::uint64_t>(((*it).get<json::Number>().value));
                 trayec_rlz.write((char*)(&rlzNode), sizeof(uint64_t));
-                trayec_rlz.write(&space, sizeof(space));
 
                 repNode = convert64to32(rlzNode, map, mapCounter);
                 trayec_rep.write((char*)(&repNode), sizeof(uint32_t));
-                trayec_rep.write(&space, sizeof(space));
 
                 nodenumber++;
                 sumdur += static_cast<int>(std::round((*durationIt).get<json::Number>().value));
@@ -281,19 +263,19 @@ int main(int argc, const char *argv[])
             newLine += ',' + std::to_string(static_cast<std::uint32_t>(dateToInt(columns[DATE_COLUMN], std::chrono::system_clock::from_time_t(edateTT))));
             newLine += ',' + std::to_string(static_cast<std::uint32_t>(dateToInt(addSecondsToDate(columns[DATE_COLUMN], sumdur), std::chrono::system_clock::from_time_t(edateTT))));
             cabeceras << newLine << std::endl;
-
+            /*
             std::uintmax_t currentSize = getFileSize(outputFolder + "/trayectorias-rep");
             if (currentSize > maxSize) {
                 std::cout << "RePair Trajectory file reached max established file size" << std::endl;
                 break;
             }
-            /*
-            currentSize = getFileSize(outputFolder + "/trayectorias-rlz");
+            */
+            std::uintmax_t currentSize = getFileSize(outputFolder + "/trayectorias-rlz");
             if (currentSize > maxSize) {
                 std::cout << "RLZ Trajectory file reached max established file size" << std::endl;
                 break;
             }
-            */
+
         }
     }
     std::cout << std::endl;
