@@ -81,15 +81,25 @@ std::vector<uint8_t> uint64ToBinary(uint64_t trajectory) {
 
 // Function to get the size of a file in bytes
 std::uintmax_t getFileSize(const std::string& filename) {
-    struct stat fileStat;
+    struct stat fileStat{};
     if (stat(filename.c_str(), &fileStat) == 0) {
         return fileStat.st_size;
     }
     return 0;
 }
 
-int updateProgress(int curLine, int totalLines, int prevPercentage) {
-    int progressPercentage = (curLine * 100) / totalLines;
+uint32_t convert64to32(uint64_t key, std::map<uint64_t, uint32_t> map, uint32_t counter){
+    auto it = map.find(key);
+    if (it == map.end()) {
+        map[key] = counter++;
+        return map[key];
+    } else {
+        return it->second;
+    }
+}
+
+int updateProgress(uint64_t curLine, uint64_t totalLines, int prevPercentage) {
+    int progressPercentage = (int)((curLine * 100ULL) / totalLines);
     // Print the progress percentage if it has changed
     if (progressPercentage != prevPercentage) {
         std::cout << "\rProgress: " << progressPercentage << "%  " << std::flush;
@@ -134,11 +144,12 @@ int main(int argc, const char *argv[])
 
     std::ifstream input(argv[1]);
     std::ofstream trayec_rlz(outputFolder + "/trayectorias-rlz", std::ios::binary);
+    std::ofstream trayec_rep(outputFolder + "/trayectorias-rep", std::ios::binary);
     std::ofstream tiempos(outputFolder + "/tiempos.txt");
     std::ofstream cabeceras(outputFolder + "/cabeceras.csv");
     std::ofstream errores(outputFolder + "/errores.txt");
 
-    if(!input.is_open() || !trayec_rlz.is_open() || !tiempos.is_open() || !cabeceras.is_open() || !errores.is_open()){
+    if(!input.is_open() || !trayec_rlz.is_open() || !tiempos.is_open() || !cabeceras.is_open() || !errores.is_open() || !trayec_rep.is_open()){
         std::cout << "Error opening files." << std::endl;
         return EXIT_FAILURE;
     }
@@ -180,8 +191,11 @@ int main(int argc, const char *argv[])
     int faultyLines = 0;
     uint64_t nodenumber = 0;
     char space = ' ';
-    uint64_t tray_sep = UINT64_MAX;
+    uint64_t tray_sep = UINT64_MAX; // separator between trajectories for RLZ
+    uint32_t tray_sep_rep = 0;      // separator between trajectories for RePair
     const std::uintmax_t maxSize = MAX_TRAY_SIZE;
+    std::map<uint64_t, uint32_t> map;  // to associate any 64 bits node to 32 bits
+    uint32_t mapCounter = 1;
     while (std::getline(input, line))
     {
         // Update the progress percentage
@@ -225,31 +239,36 @@ int main(int argc, const char *argv[])
             auto durationIt = durations.values.begin();
             auto it = nodes.values.begin();
 
-            //trayectorias << static_cast<std::uint64_t>(((*it).get<json::Number>().value)) << " ";
-            //std::vector<uint8_t> binaryTrajectory = uint64ToBinary((*it).get<json::Number>().value);
-            //trayec_rlz.write((char*)(binaryTrajectory.data()), binaryTrajectory.size());
-            //trayec_rlz.write(&space, sizeof(space));
-            uint64_t node = static_cast<std::uint64_t>(((*it).get<json::Number>().value));
-            trayec_rlz.write(reinterpret_cast<const char*>(&node), sizeof(uint64_t));
+            auto rlzNode = static_cast<std::uint64_t>(((*it).get<json::Number>().value));
+            trayec_rlz.write(reinterpret_cast<const char*>(&rlzNode), sizeof(uint64_t));
             trayec_rlz.write(&space, sizeof(space));
+
+            uint32_t repNode = convert64to32(rlzNode, map, mapCounter);
+            trayec_rep.write(reinterpret_cast<const char*>(&repNode), sizeof(uint32_t));
+            trayec_rep.write(&space, sizeof(space));
+
             it++;
-            nodenumber++;
+            //nodenumber++;
             tiempos << 0 << " ";
 
             // Node IDs and Durations
             for (it; it != nodes.values.end(); it++) {
-                //binaryTrajectory = uint64ToBinary((*it).get<json::Number>().value);
-                //trayec_rlz.write((char*)(binaryTrajectory.data()), binaryTrajectory.size());
-                node = static_cast<std::uint64_t>(((*it).get<json::Number>().value));
-                trayec_rlz.write((char*)(&node), sizeof(uint64_t));
+                rlzNode = static_cast<std::uint64_t>(((*it).get<json::Number>().value));
+                trayec_rlz.write((char*)(&rlzNode), sizeof(uint64_t));
                 trayec_rlz.write(&space, sizeof(space));
+
+                repNode = convert64to32(rlzNode, map, mapCounter);
+                trayec_rep.write((char*)(&repNode), sizeof(uint32_t));
+                trayec_rep.write(&space, sizeof(space));
+
                 nodenumber++;
                 sumdur += static_cast<int>(std::round((*durationIt).get<json::Number>().value));
                 tiempos << sumdur << " ";
                 durationIt++;
             }
-            //trayectorias << 0 << " ";
             trayec_rlz.write((char*)(&tray_sep), sizeof(uint64_t));
+            trayec_rep.write((char*)(&tray_sep_rep), sizeof(uint32_t));
+            nodenumber+=2;
             tiempos << UINT32_MAX << " ";
             
             // Headers
@@ -263,18 +282,25 @@ int main(int argc, const char *argv[])
             newLine += ',' + std::to_string(static_cast<std::uint32_t>(dateToInt(addSecondsToDate(columns[DATE_COLUMN], sumdur), std::chrono::system_clock::from_time_t(edateTT))));
             cabeceras << newLine << std::endl;
 
-            std::uintmax_t currentSize = getFileSize(outputFolder + "/trayectorias-rlz");
+            std::uintmax_t currentSize = getFileSize(outputFolder + "/trayectorias-rep");
+            if (currentSize > maxSize) {
+                std::cout << "RePair Trajectory file reached max established file size" << std::endl;
+                break;
+            }
+            /*
+            currentSize = getFileSize(outputFolder + "/trayectorias-rlz");
             if (currentSize > maxSize) {
                 std::cout << "RLZ Trajectory file reached max established file size" << std::endl;
                 break;
             }
-
+            */
         }
     }
     std::cout << std::endl;
 
     input.close();
     trayec_rlz.close();
+    trayec_rep.close();
     tiempos.close();
     cabeceras.close();
     errores.close();
@@ -287,15 +313,20 @@ int main(int argc, const char *argv[])
     auto minutes = std::chrono::duration_cast<std::chrono::minutes>(time);
     time -= minutes;
     auto seconds = std::chrono::duration_cast<std::chrono::seconds>(time);
+
+    // Output information
     std::cout << "Execution time: ";
     std::cout << std::setfill('0');
     std::cout << std::setw(2) << hours.count() << "H:";
     std::cout << std::setw(2) << minutes.count() << "M:";
     std::cout << std::setw(2) << seconds.count() << "S" << std::endl;
 
+    std::cout << "Processed lines: " << currentLine << std::endl;
+
     std::cout << "Lines with errors: " << faultyLines << " (stored in " << outputFolder + "/errores.txt" << ")";
     std::cout << std::endl;
-    std::cout << "Total number of nodes in " << outputFolder + "/trayec_rlz.txt: " << nodenumber << std::endl;
+
+    std::cout << "Total number of nodes in trajectory files: " << nodenumber << std::endl;
 
     return EXIT_SUCCESS;
 }
