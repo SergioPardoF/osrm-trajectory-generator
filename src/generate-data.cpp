@@ -25,7 +25,7 @@
 #define LONG_D      12              // Column of the longitude of destination
 #define LAT_D       13              // Column of the latitude of destination
 #define MAX_TRAY_SIZE 100000000     // Max size of output trajectory files
-#define MAXTRAVELS 130807
+#define MAXTRAVELS 130807           // Max number of travels to generate
 
 // Function to split a string based on delimiter
 std::vector<std::string> splitString(const std::string& line, char delimiter) {
@@ -300,17 +300,24 @@ int main(int argc, const char *argv[])
             newLine += ',' + std::to_string(static_cast<std::uint32_t>(dateToInt(addSecondsToDate(columns[DATE_COLUMN], sumdur), std::chrono::system_clock::from_time_t(edateTT))));
             cabeceras << newLine << std::endl;
 
+            // GENERATOR TERMINATIONS
+            // 1ST IF FOR TERMINATING PROGRAM AFTER MAXTRAVELS NUMBER OF TRAVELS
+            // 2ND IF FOR TERMINATING PROGRAM AFTER MAX_TRAY_SIZE (SIZE OF RePair TRAJECTORY FILE (32 BITS))
+            // 3RD IF FOR TERMINATING PROGRAM AFTER MAX_TRAY_SIZE (SIZE OF RLZ TRAJECTORY FILE (64 BITS))
+            // COMMENT AL IFS TO PROCESS WHOLE FILE
+            
+            /*
             if (travelCounter++ >= MAXTRAVELS) {
                 std::cout << "Max number of travels reached (" << MAXTRAVELS << ")" << std::endl;
                 break;
             }
-            /*
+            */
             std::uintmax_t currentSize = getFileSize(outputFolder + "/trayectorias-rep");
             if (currentSize > maxSize) {
                 std::cout << "RePair Trajectory file reached max established file size" << std::endl;
                 break;
             }
-            *//*
+            /*
             std::uintmax_t currentSize = getFileSize(outputFolder + "/trayectorias-rlz");
             if (currentSize > maxSize) {
                 std::cout << "RLZ Trajectory file reached max established file size" << std::endl;
