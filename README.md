@@ -12,6 +12,8 @@ It also generates a file with the duration of the trip rounded to an unsigned in
 
 0 1 3 5 4294967295
 
+Note: lines 252 and 255 of /src/generate-data.cpp use a map to transform the id nodes into smaller numbers. If you want the original nodes modify this lines. 
+
 Along with those two files, it also prints a csv with the id of the object in the trip, the coordinates of origin and destination and the times of departure and arrival (expresed in seconds since the date defined in the constant EDATE in generate_data.cpp).
 
 A file with the lines of the csv that couldn't be processed it's also generated with the line number and the reason.
