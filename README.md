@@ -41,8 +41,20 @@ sudo apt install -y liblua5.2-dev libboost-all-dev libprotobuf-dev libtbb-dev li
 - cd osrm-data-generator
 - ./compile.sh (if needed, use chmod +x path/compile.sh)
     - this will compile the OSRM backend and the generator
-- ./build.sh (if needed, use chmod +x path/compile.sh)
-    - this will extract the us northeast map in ./maps/us-ne and create the structures needed for tracing the routes
+
+#### Preparing the map
+
+- ./external/osrm-backend/build/osrm-extract -p external/osrm-backend/profiles/car.lua <your_map.pbf>
+- ./external/osrm-backend/build/osrm-partition <your_map>
+- ./external/osrm-backend/build/osrm-customize <your_map>
+Note: These operations are memory intensive. You might need to enable swap depending on the size of the map.
+
+#### Adjusting generator
+
+In src/generate-data.cpp:
+
+- Change EDATE constant to a date previous to the earliest date in your data (default is 2012-12-31 00:00:00)
+- Change termination of the generator to your needs (see line 303) (default is 100 MB on the 32 bit trajectories file)
 
 #### Docker
 
@@ -57,3 +69,12 @@ After that run the generator with:
 ```
 docker run -v </path/to/csv/with/data>:/csv -v </path/to/output/dir>:/out osrm-generator /csv/<csv_name.csv> /data/maps/us-ne/us-northeast-latest /out
 ```
+
+#### Example data
+
+## Map:
+    - US NE: https://download.geofabrik.de/north-america/us-northeast.html (https://web.archive.org/web/20240119124756/https://download.geofabrik.de/north-america/us-northeast.html)
+
+## Trajectory data:
+
+    - NYC Taxi trips: https://www.andresmh.com/nyctaxitrips/ (https://web.archive.org/web/20240610000743/https://www.andresmh.com/nyctaxitrips/)
